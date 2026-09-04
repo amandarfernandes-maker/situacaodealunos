@@ -1,17 +1,26 @@
 import pandas as pd
 import numpy as np
-import tkinter as tk
-from tkinter import ttk, messagebox
+import streamlit as st
+import matplotlib.pyplot as plt
 
 from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 
-import matplotlib.pyplot as plt
+
+# ==========================================================
+# 1. CONFIGURAÇÃO DA PÁGINA
+# ==========================================================
+
+st.set_page_config(
+    page_title="Análise de Desempenho Escolar",
+    page_icon="📚",
+    layout="wide"
+)
 
 
 # ==========================================================
-# 1. GERANDO UMA BASE DE DADOS MAIOR
+# 2. GERANDO UMA BASE DE DADOS MAIOR
 # ==========================================================
 
 np.random.seed(42)
@@ -23,9 +32,7 @@ faltas = np.random.randint(0, 31, quantidade_alunos)
 nota = np.round(np.random.uniform(0, 10, quantidade_alunos), 1)
 
 
-# Regra para criar uma situação mais realista
 def classificar_aluno(horas, faltas, nota):
-
     # Aprovado:
     # Nota >= 7 e poucas faltas
     if nota >= 7 and faltas <= 10:
@@ -48,7 +55,6 @@ situacao = [
 ]
 
 
-# Criando DataFrame
 df = pd.DataFrame({
     "Horas_de_estudo": horas_estudo,
     "Faltas": faltas,
@@ -57,15 +63,8 @@ df = pd.DataFrame({
 })
 
 
-print("Primeiros registros:")
-print(df.head())
-
-print("\nQuantidade por situação:")
-print(df["Situacao"].value_counts())
-
-
 # ==========================================================
-# 2. SEPARANDO VARIÁVEIS
+# 3. SEPARANDO VARIÁVEIS
 # ==========================================================
 
 x = df[["Horas_de_estudo", "Faltas", "Nota"]]
@@ -73,7 +72,7 @@ y = df["Situacao"]
 
 
 # ==========================================================
-# 3. TREINO E TESTE
+# 4. TREINO E TESTE
 # ==========================================================
 
 x_train, x_teste, y_train, y_teste = train_test_split(
@@ -86,7 +85,7 @@ x_train, x_teste, y_train, y_teste = train_test_split(
 
 
 # ==========================================================
-# 4. CRIANDO O MODELO
+# 5. CRIANDO O MODELO
 # ==========================================================
 
 modelo = DecisionTreeClassifier(
@@ -100,30 +99,122 @@ modelo.fit(x_train, y_train)
 
 
 # ==========================================================
-# 5. AVALIANDO O MODELO
+# 6. AVALIANDO O MODELO
 # ==========================================================
 
 previsoes_teste = modelo.predict(x_teste)
-
 acuracia = accuracy_score(y_teste, previsoes_teste)
 
-print("\n==============================")
-print("AVALIAÇÃO DO MODELO")
-print("==============================")
 
-print(f"Acurácia: {acuracia * 100:.2f}%")
+# ==========================================================
+# 7. CABEÇALHO
+# ==========================================================
 
-print("\nRelatório de classificação:")
-print(classification_report(y_teste, previsoes_teste))
+st.title("📚 Análise de Desempenho Escolar")
+st.caption("Preencha os dados do aluno para realizar a previsão usando uma Árvore de Decisão.")
 
 
 # ==========================================================
-# 6. FUNÇÃO PARA MOSTRAR A ÁRVORE
+# 8. FORMULÁRIO / ENTRADAS
 # ==========================================================
 
-def mostrar_arvore():
+st.subheader("📝 Dados do aluno")
 
-    plt.figure(figsize=(20, 10))
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    horas = st.number_input(
+        "Horas de estudo",
+        min_value=0.0,
+        max_value=24.0,
+        value=5.0,
+        step=0.5
+    )
+
+with col2:
+    faltas_aluno = st.number_input(
+        "Quantidade de faltas",
+        min_value=0.0,
+        max_value=100.0,
+        value=5.0,
+        step=1.0
+    )
+
+with col3:
+    nota_aluno = st.number_input(
+        "Nota",
+        min_value=0.0,
+        max_value=10.0,
+        value=7.0,
+        step=0.1
+    )
+
+
+# ==========================================================
+# 9. BOTÃO DE PREVISÃO
+# ==========================================================
+
+if st.button("🔍 Analisar Aluno", type="primary", use_container_width=True):
+
+    novo_aluno = pd.DataFrame(
+        [[horas, faltas_aluno, nota_aluno]],
+        columns=["Horas_de_estudo", "Faltas", "Nota"]
+    )
+
+    previsao = modelo.predict(novo_aluno)[0]
+
+    probabilidades = modelo.predict_proba(novo_aluno)[0]
+    indice = list(modelo.classes_).index(previsao)
+    confianca = probabilidades[indice] * 100
+
+    st.divider()
+    st.subheader("📊 Resultado da análise")
+
+    if previsao == "Aprovado":
+        st.success(f"### Situação: {previsao}")
+    elif previsao == "Recuperação":
+        st.warning(f"### Situação: {previsao}")
+    else:
+        st.error(f"### Situação: {previsao}")
+
+    st.metric("Confiança aproximada", f"{confianca:.1f}%")
+
+    st.info(
+        f"**Detalhes do aluno**\n\n"
+        f"- Horas de estudo: {horas:.1f}\n"
+        f"- Faltas: {faltas_aluno:.0f}\n"
+        f"- Nota: {nota_aluno:.1f}"
+    )
+
+    # Probabilidades por classe
+    st.subheader("Probabilidades por situação")
+
+    prob_df = pd.DataFrame({
+        "Situação": modelo.classes_,
+        "Probabilidade": probabilidades * 100
+    })
+
+    st.bar_chart(
+        prob_df.set_index("Situação")["Probabilidade"]
+    )
+
+
+# ==========================================================
+# 10. VISUALIZAÇÕES DO MODELO
+# ==========================================================
+
+st.divider()
+st.subheader("🤖 Modelo de Machine Learning")
+
+tab1, tab2, tab3 = st.tabs([
+    "🌳 Árvore de Decisão",
+    "📊 Matriz de Confusão",
+    "📋 Relatório"
+])
+
+
+with tab1:
+    fig, ax = plt.subplots(figsize=(20, 10))
 
     plot_tree(
         modelo,
@@ -131,20 +222,16 @@ def mostrar_arvore():
         class_names=modelo.classes_,
         filled=True,
         rounded=True,
-        fontsize=10
+        fontsize=10,
+        ax=ax
     )
 
-    plt.title("Árvore de Decisão - Desempenho dos Alunos")
+    ax.set_title("Árvore de Decisão - Desempenho dos Alunos")
+    st.pyplot(fig)
+    plt.close(fig)
 
-    plt.show()
 
-
-# ==========================================================
-# 7. FUNÇÃO PARA MOSTRAR MATRIZ DE CONFUSÃO
-# ==========================================================
-
-def mostrar_matriz_confusao():
-
+with tab2:
     matriz = confusion_matrix(
         y_teste,
         previsoes_teste,
@@ -152,8 +239,7 @@ def mostrar_matriz_confusao():
     )
 
     fig, ax = plt.subplots(figsize=(7, 5))
-
-    imagem = ax.imshow(matriz, cmap="Blues")
+    imagem = ax.imshow(matriz)
 
     ax.set_title("Matriz de Confusão")
     ax.set_xlabel("Previsão")
@@ -165,7 +251,6 @@ def mostrar_matriz_confusao():
     ax.set_xticklabels(modelo.classes_)
     ax.set_yticklabels(modelo.classes_)
 
-    # Mostra os números dentro da matriz
     for i in range(len(modelo.classes_)):
         for j in range(len(modelo.classes_)):
             ax.text(
@@ -173,455 +258,49 @@ def mostrar_matriz_confusao():
                 i,
                 matriz[i, j],
                 ha="center",
-                va="center",
-                color="black"
+                va="center"
             )
 
-    plt.colorbar(imagem)
+    plt.colorbar(imagem, ax=ax)
     plt.tight_layout()
-    plt.show()
+
+    st.pyplot(fig)
+    plt.close(fig)
 
 
-# ==========================================================
-# 8. FUNÇÃO DE PREVISÃO
-# ==========================================================
-
-def prever():
-
-    try:
-
-        horas = float(entry_horas.get())
-        faltas_aluno = float(entry_faltas.get())
-        nota_aluno = float(entry_nota.get())
-
-        # Validação
-        if horas < 0 or horas > 24:
-            messagebox.showerror(
-                "Erro",
-                "As horas de estudo devem estar entre 0 e 24."
-            )
-            return
-
-        if faltas_aluno < 0 or faltas_aluno > 100:
-            messagebox.showerror(
-                "Erro",
-                "O número de faltas deve estar entre 0 e 100."
-            )
-            return
-
-        if nota_aluno < 0 or nota_aluno > 10:
-            messagebox.showerror(
-                "Erro",
-                "A nota deve estar entre 0 e 10."
-            )
-            return
-
-
-        # DataFrame do novo aluno
-        novo_aluno = pd.DataFrame(
-            [[horas, faltas_aluno, nota_aluno]],
-            columns=[
-                "Horas_de_estudo",
-                "Faltas",
-                "Nota"
-            ]
-        )
-
-
-        # Previsão
-        previsao = modelo.predict(novo_aluno)[0]
-
-        # Probabilidade
-        probabilidades = modelo.predict_proba(novo_aluno)[0]
-
-        indice = list(modelo.classes_).index(previsao)
-
-        confianca = probabilidades[indice] * 100
-
-
-        # Atualizando resultado
-        label_resultado.config(
-            text=f"Situação: {previsao}",
-            foreground=cor_resultado(previsao)
-        )
-
-        label_confianca.config(
-            text=f"Confiança aproximada: {confianca:.1f}%"
-        )
-
-
-        # Detalhes
-        label_detalhes.config(
-            text=(
-                f"Horas de estudo: {horas:.1f}\n"
-                f"Faltas: {faltas_aluno:.0f}\n"
-                f"Nota: {nota_aluno:.1f}"
-            )
-        )
-
-
-    except ValueError:
-
-        messagebox.showerror(
-            "Erro",
-            "Digite apenas números válidos."
-        )
-
-
-# ==========================================================
-# 9. COR DO RESULTADO
-# ==========================================================
-
-def cor_resultado(resultado):
-
-    if resultado == "Aprovado":
-        return "#16a34a"
-
-    elif resultado == "Recuperação":
-        return "#d97706"
-
-    else:
-        return "#dc2626"
-
-
-# ==========================================================
-# 10. LIMPAR CAMPOS
-# ==========================================================
-
-def limpar():
-
-    entry_horas.delete(0, tk.END)
-    entry_faltas.delete(0, tk.END)
-    entry_nota.delete(0, tk.END)
-
-    label_resultado.config(
-        text="Situação: --",
-        foreground="#1f2937"
+with tab3:
+    st.metric(
+        "Acurácia no teste",
+        f"{acuracia * 100:.2f}%"
     )
 
-    label_confianca.config(
-        text="Confiança aproximada: --"
+    relatorio = classification_report(
+        y_teste,
+        previsoes_teste,
+        output_dict=True
     )
 
-    label_detalhes.config(
-        text="Informe os dados do aluno."
+    relatorio_df = pd.DataFrame(relatorio).transpose()
+
+    st.dataframe(
+        relatorio_df.round(3),
+        use_container_width=True
     )
 
 
 # ==========================================================
-# 11. INTERFACE
+# 11. INFORMAÇÕES DA BASE
 # ==========================================================
 
-janela = tk.Tk()
+st.divider()
 
-janela.title("Sistema de Análise de Alunos")
-janela.geometry("650x600")
-janela.configure(bg="#f1f5f9")
+col1, col2 = st.columns(2)
 
+with col1:
+    st.write(f"**Modelo treinado com:** {len(df)} alunos")
 
-# ------------------------------
-# Estilo
-# ------------------------------
+with col2:
+    st.write(f"**Acurácia no teste:** {acuracia * 100:.2f}%")
 
-style = ttk.Style()
-
-style.theme_use("clam")
-
-style.configure(
-    "TButton",
-    font=("Arial", 11, "bold"),
-    padding=10
-)
-
-style.configure(
-    "TLabel",
-    background="#f1f5f9",
-    font=("Arial", 11)
-)
-
-
-# ==========================================================
-# CABEÇALHO
-# ==========================================================
-
-frame_titulo = tk.Frame(
-    janela,
-    bg="#1e3a8a",
-    height=100
-)
-
-frame_titulo.pack(
-    fill="x"
-)
-
-label_titulo = tk.Label(
-    frame_titulo,
-    text="📚 Análise de Desempenho Escolar",
-    bg="#1e3a8a",
-    fg="white",
-    font=("Arial", 22, "bold")
-)
-
-label_titulo.pack(
-    pady=(20, 5)
-)
-
-label_subtitulo = tk.Label(
-    frame_titulo,
-    text="Preencha os dados do aluno para realizar a previsão",
-    bg="#1e3a8a",
-    fg="#dbeafe",
-    font=("Arial", 10)
-)
-
-label_subtitulo.pack()
-
-
-# ==========================================================
-# FORMULÁRIO
-# ==========================================================
-
-frame_form = tk.Frame(
-    janela,
-    bg="white",
-    padx=30,
-    pady=25
-)
-
-frame_form.pack(
-    padx=40,
-    pady=25,
-    fill="x"
-)
-
-
-# Horas
-label_horas = tk.Label(
-    frame_form,
-    text="Horas de estudo:",
-    bg="white",
-    font=("Arial", 11, "bold")
-)
-
-label_horas.grid(
-    row=0,
-    column=0,
-    sticky="w",
-    pady=10
-)
-
-entry_horas = ttk.Entry(
-    frame_form,
-    width=30
-)
-
-entry_horas.grid(
-    row=0,
-    column=1,
-    pady=10,
-    padx=20
-)
-
-
-# Faltas
-label_faltas = tk.Label(
-    frame_form,
-    text="Quantidade de faltas:",
-    bg="white",
-    font=("Arial", 11, "bold")
-)
-
-label_faltas.grid(
-    row=1,
-    column=0,
-    sticky="w",
-    pady=10
-)
-
-entry_faltas = ttk.Entry(
-    frame_form,
-    width=30
-)
-
-entry_faltas.grid(
-    row=1,
-    column=1,
-    pady=10,
-    padx=20
-)
-
-
-# Nota
-label_nota = tk.Label(
-    frame_form,
-    text="Nota:",
-    bg="white",
-    font=("Arial", 11, "bold")
-)
-
-label_nota.grid(
-    row=2,
-    column=0,
-    sticky="w",
-    pady=10
-)
-
-entry_nota = ttk.Entry(
-    frame_form,
-    width=30
-)
-
-entry_nota.grid(
-    row=2,
-    column=1,
-    pady=10,
-    padx=20
-)
-
-
-# ==========================================================
-# BOTÕES
-# ==========================================================
-
-frame_botoes = tk.Frame(
-    janela,
-    bg="#f1f5f9"
-)
-
-frame_botoes.pack(
-    pady=5
-)
-
-
-botao_prever = ttk.Button(
-    frame_botoes,
-    text="🔍 Analisar Aluno",
-    command=prever
-)
-
-botao_prever.grid(
-    row=0,
-    column=0,
-    padx=5
-)
-
-
-botao_limpar = ttk.Button(
-    frame_botoes,
-    text="🗑 Limpar",
-    command=limpar
-)
-
-botao_limpar.grid(
-    row=0,
-    column=1,
-    padx=5
-)
-
-
-botao_arvore = ttk.Button(
-    frame_botoes,
-    text="🌳 Ver Árvore",
-    command=mostrar_arvore
-)
-
-botao_arvore.grid(
-    row=0,
-    column=2,
-    padx=5
-)
-
-
-botao_matriz = ttk.Button(
-    frame_botoes,
-    text="📊 Matriz",
-    command=mostrar_matriz_confusao
-)
-
-botao_matriz.grid(
-    row=0,
-    column=3,
-    padx=5
-)
-
-
-# ==========================================================
-# RESULTADO
-# ==========================================================
-
-frame_resultado = tk.Frame(
-    janela,
-    bg="white",
-    padx=20,
-    pady=20
-)
-
-frame_resultado.pack(
-    padx=40,
-    pady=20,
-    fill="x"
-)
-
-
-label_resultado = tk.Label(
-    frame_resultado,
-    text="Situação: --",
-    bg="white",
-    fg="#1f2937",
-    font=("Arial", 20, "bold")
-)
-
-label_resultado.pack(
-    pady=5
-)
-
-
-label_confianca = tk.Label(
-    frame_resultado,
-    text="Confiança aproximada: --",
-    bg="white",
-    fg="#475569",
-    font=("Arial", 11)
-)
-
-label_confianca.pack(
-    pady=5
-)
-
-
-label_detalhes = tk.Label(
-    frame_resultado,
-    text="Informe os dados do aluno.",
-    bg="white",
-    fg="#64748b",
-    font=("Arial", 10)
-)
-
-label_detalhes.pack(
-    pady=5
-)
-
-
-# ==========================================================
-# INFORMAÇÕES DO MODELO
-# ==========================================================
-
-label_modelo = tk.Label(
-    janela,
-    text=f"Modelo treinado com {len(df)} alunos | "
-         f"Acurácia no teste: {acuracia * 100:.2f}%",
-    bg="#f1f5f9",
-    fg="#475569",
-    font=("Arial", 9)
-)
-
-label_modelo.pack(
-    pady=5
-)
-
-
-# ==========================================================
-# EXECUTAR
-# ==========================================================
-
-janela.mainloop()
+with st.expander("👀 Visualizar primeiros registros da base"):
+    st.dataframe(df.head(20), use_container_width=True)
